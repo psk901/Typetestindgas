@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NumSprint — 10-Digit Speed Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --panel: #111318;
+    --border: #1e2330;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --correct: #39ff14;
+    --wrong: #ff2d55;
+    --dim: #3a4055;
+    --text: #e8eaf0;
+    --muted: #5a6278;
+    --glow: 0 0 18px #00e5ff55;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Manrope', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 20% 10%, #00e5ff08 0%, transparent 60%),
+      radial-gradient(ellipse 50% 30% at 80% 90%, #ff6b3508 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, #ffffff04 39px, #ffffff04 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, #ffffff04 39px, #ffffff04 40px);
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.2rem, 6vw, 3.8rem);
+    letter-spacing: 0.08em;
+    background: linear-gradient(90deg, var(--accent), #80ffff, var(--accent));
+    background-size: 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+    margin-bottom: 4px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 0% }
+    100% { background-position: 200% }
+  }
+
+  .subtitle {
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 680px;
+    padding: 32px 36px;
+    box-shadow: 0 0 60px #00000060, inset 0 1px 0 #ffffff08;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  /* Stats Row */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-box {
+    background: #0d1018;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .stat-val.orange { color: var(--accent2); }
+  .stat-val.green { color: var(--correct); }
+  .stat-val.red { color: var(--wrong); }
+
+  .stat-lbl {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-top: 4px;
+  }
+
+  /* Progress bar */
+  .progress-wrap {
+    background: #0d1018;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    height: 6px;
+    margin-bottom: 22px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #80ffff);
+    border-radius: 6px;
+    transition: width 0.15s ease;
+    box-shadow: 0 0 10px var(--accent);
+    width: 0%;
+  }
+
+  /* Number display */
+  .number-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(2rem, 7vw, 3.6rem);
+    letter-spacing: 0.22em;
+    text-align: center;
+    margin-bottom: 20px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0d1018;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .number-display .digit {
+    display: inline-block;
+    transition: color 0.1s, transform 0.1s;
+    position: relative;
+  }
+
+  .digit.correct { color: var(--correct); }
+  .digit.wrong {
+    color: var(--wrong);
+    animation: shake 0.25s ease;
+  }
+  .digit.pending { color: var(--dim); }
+  .digit.cursor {
+    color: var(--text);
+    text-shadow: 0 0 16px var(--accent);
+  }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+
+  /* Input area */
+  .input-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  #typed-input {
+    flex: 1;
+    background: #0d1018;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    letter-spacing: 0.15em;
+    padding: 12px 18px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    text-align: center;
+  }
+
+  #typed-input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+
+  #typed-input.error {
+    border-color: var(--wrong);
+    box-shadow: 0 0 16px #ff2d5540;
+  }
+
+  #typed-input.success {
+    border-color: var(--correct);
+    box-shadow: 0 0 16px #39ff1440;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    min-width: 100px;
+  }
+
+  .btn-primary:hover {
+    background: #4df0ff;
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover {
+    color: var(--text);
+    border-color: var(--dim);
+  }
+
+  /* Round history */
+  .history-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 160px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .history-item {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto auto;
+    align-items: center;
+    gap: 10px;
+    background: #0d1018;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    animation: slideIn 0.25s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .history-item .round-num {
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+
+  .history-item .h-num {
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+
+  .history-item .h-time {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .history-item .h-wpm {
+    color: var(--accent2);
+    font-size: 0.75rem;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .badge-ok { background: #39ff1420; color: var(--correct); }
+  .badge-err { background: #ff2d5520; color: var(--wrong); }
+
+  /* Feedback flash */
+  .feedback {
+    text-align: center;
+    font-size: 0.85rem;
+    height: 22px;
+    margin-bottom: 14px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    transition: opacity 0.3s;
+  }
+
+  /* Controls row */
+  .controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-family: 'Manrope', sans-serif;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .mode-btn.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Countdown overlay */
+  .countdown {
+    position: absolute;
+    inset: 0;
+    background: #0a0c10ee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 6rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    z-index: 10;
+    border-radius: 16px;
+    text-shadow: var(--glow);
+    animation: pulse 1s ease infinite;
+    display: none;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); }
+  }
+
+  /* Best badge */
+  .crown {
+    font-size: 0.7rem;
+    color: #ffd700;
+    margin-left: 4px;
+  }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+
+  .timer-ring {
+    width: 58px;
+    height: 58px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .timer-ring svg {
+    transform: rotate(-90deg);
+  }
+
+  .timer-ring circle {
+    fill: none;
+    stroke-width: 4;
+    stroke-linecap: round;
+  }
+
+  .ring-bg { stroke: var(--border); }
+  .ring-fg {
+    stroke: var(--accent);
+    stroke-dasharray: 157;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+    filter: drop-shadow(0 0 4px var(--accent));
+  }
+
+  .ring-val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 520px) {
+    .card { padding: 20px 16px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .number-display { font-size: 1.8rem; letter-spacing: 0.15em; }
+  }
+</style>
+</head>
+<body>
+
+<h1>NumSprint</h1>
+<p class="subtitle">10-Digit Number Speed Trainer</p>
+
+<div class="card">
+  <div class="countdown" id="countdown">GO!</div>
+
+  <!-- Top: Controls + Timer -->
+  <div class="top-row">
+    <div>
+      <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.2em;margin-bottom:8px;">Mode</div>
+      <div class="controls" style="justify-content:flex-start;margin-bottom:0;">
+        <button class="mode-btn active" data-mode="10">10 Rounds</button>
+        <button class="mode-btn" data-mode="20">20 Rounds</button>
+        <button class="mode-btn" data-mode="endless">Endless</button>
+      </div>
+    </div>
+    <div class="timer-ring" title="Time for current number">
+      <svg width="58" height="58" viewBox="0 0 58 58">
+        <circle class="ring-bg" cx="29" cy="29" r="25"/>
+        <circle class="ring-fg" id="ring-fg" cx="29" cy="29" r="25"/>
+      </svg>
+      <div class="ring-val" id="ring-val">—</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-box">
+      <div class="stat-val" id="stat-wpm">0</div>
+      <div class="stat-lbl">Digits/Min</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val orange" id="stat-avg">—</div>
+      <div class="stat-lbl">Avg Time (s)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val green" id="stat-best">—</div>
+      <div class="stat-lbl">Best (s)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val red" id="stat-errors">0</div>
+      <div class="stat-lbl">Errors</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+
+  <!-- Number display -->
+  <div class="number-display" id="number-display">
+    <span style="color:var(--muted);font-size:1.1rem;letter-spacing:0.1em;">Press Start</span>
+  </div>
+
+  <!-- Feedback -->
+  <div class="feedback" id="feedback"></div>
+
+  <!-- Input row -->
+  <div class="input-row">
+    <input type="text" id="typed-input" inputmode="numeric" pattern="[0-9]*"
+           maxlength="10" placeholder="Type the number above..."
+           autocomplete="off" autocorrect="off" spellcheck="false" disabled>
+    <button class="btn btn-primary" id="start-btn">Start</button>
+    <button class="btn btn-ghost" id="reset-btn">↺</button>
+  </div>
+
+  <hr class="divider">
+
+  <!-- History -->
+  <div class="history-title">Round History</div>
+  <div class="history-list" id="history-list">
+    <div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:10px 0;">
+      No rounds yet — hit Start!
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────────
+  let currentNumber = '';
+  let startTime = null;
+  let roundTimer = null;
+  let ringTimer = null;
+  let round = 0;
+  let totalRounds = 10;
+  let mode = '10';
+  let history = [];
+  let bestTime = Infinity;
+  let totalErrors = 0;
+  let running = false;
+  let ringDuration = 15; // seconds on ring
+
+  const $num = document.getElementById('number-display');
+  const $inp = document.getElementById('typed-input');
+  const $start = document.getElementById('start-btn');
+  const $reset = document.getElementById('reset-btn');
+  const $feedback = document.getElementById('feedback');
+  const $progress = document.getElementById('progress-bar');
+  const $wpm = document.getElementById('stat-wpm');
+  const $avg = document.getElementById('stat-avg');
+  const $best = document.getElementById('stat-best');
+  const $errors = document.getElementById('stat-errors');
+  const $history = document.getElementById('history-list');
+  const $ringFg = document.getElementById('ring-fg');
+  const $ringVal = document.getElementById('ring-val');
+  const $countdown = document.getElementById('countdown');
+
+  // ── Mode buttons ──────────────────────────────────────
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (running) return;
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      totalRounds = mode === 'endless' ? Infinity : parseInt(mode);
+    });
+  });
+
+  // ── Generate 10-digit number ──────────────────────────
+  function genNumber() {
+    // First digit never 0
+    let n = String(Math.floor(Math.random() * 9) + 1);
+    for (let i = 1; i < 10; i++) n += String(Math.floor(Math.random() * 10));
+    return n;
+  }
+
+  // ── Render number with per-digit spans ────────────────
+  function renderNumber(num, typed = '') {
+    $num.innerHTML = '';
+    for (let i = 0; i < num.length; i++) {
+      const span = document.createElement('span');
+      span.className = 'digit';
+      span.textContent = num[i];
+      if (i < typed.length) {
+        span.classList.add(typed[i] === num[i] ? 'correct' : 'wrong');
+      } else if (i === typed.length) {
+        span.classList.add('cursor');
+      } else {
+        span.classList.add('pending');
+      }
+      $num.appendChild(span);
+    }
+  }
+
+  // ── Ring timer ────────────────────────────────────────
+  function startRing(seconds) {
+    clearInterval(ringTimer);
+    const circumference = 157;
+    let elapsed = 0;
+    $ringFg.style.stroke = 'var(--accent)';
+    $ringFg.style.strokeDashoffset = 0;
+    $ringVal.style.color = 'var(--accent)';
+
+    ringTimer = setInterval(() => {
+      elapsed += 0.1;
+      const pct = Math.min(elapsed / seconds, 1);
+      $ringFg.style.strokeDashoffset = circumference * pct;
+      $ringVal.textContent = (seconds - elapsed).toFixed(1).replace('-0.0','0.0');
+
+      if (pct > 0.65) {
+        $ringFg.style.stroke = 'var(--accent2)';
+        $ringVal.style.color = 'var(--accent2)';
+      }
+      if (pct >= 1) {
+        clearInterval(ringTimer);
+        $ringFg.style.stroke = 'var(--wrong)';
+        $ringVal.style.color = 'var(--wrong)';
+      }
+    }, 100);
+  }
+
+  function stopRing() {
+    clearInterval(ringTimer);
+    $ringFg.style.strokeDashoffset = 0;
+    $ringVal.textContent = '—';
+    $ringFg.style.stroke = 'var(--accent)';
+    $ringVal.style.color = 'var(--accent)';
+  }
+
+  // ── Feedback flash ────────────────────────────────────
+  function flash(msg, color) {
+    $feedback.textContent = msg;
+    $feedback.style.color = color;
+    clearTimeout(flash._t);
+    flash._t = setTimeout(() => { $feedback.textContent = ''; }, 1200);
+  }
+
+  // ── Start a round ─────────────────────────────────────
+  function startRound() {
+    currentNumber = genNumber();
+    $inp.value = '';
+    $inp.classList.remove('error', 'success');
+    renderNumber(currentNumber, '');
+    startTime = Date.now();
+    startRing(ringDuration);
+    $inp.focus();
+  }
+
+  // ── Update progress ───────────────────────────────────
+  function updateProgress() {
+    if (mode === 'endless') {
+      $progress.style.width = '100%';
+      return;
+    }
+    $progress.style.width = ((round / totalRounds) * 100) + '%';
+  }
+
+  // ── Update stats ──────────────────────────────────────
+  function updateStats(timeSec) {
+    // digits/min: 10 digits typed in timeSec seconds
+    const dpm = Math.round((10 / timeSec) * 60);
+    $wpm.textContent = dpm;
+
+    const avg = history.reduce((a,b) => a + b.time, 0) / history.length;
+    $avg.textContent = avg.toFixed(2);
+
+    if (timeSec < bestTime) {
+      bestTime = timeSec;
+      $best.textContent = bestTime.toFixed(2);
+    }
+    $errors.textContent = totalErrors;
+  }
+
+  // ── On correct submission ─────────────────────────────
+  function onSuccess() {
+    const elapsed = (Date.now() - startTime) / 1000;
+    stopRing();
+    $inp.classList.add('success');
+    $inp.classList.remove('error');
+
+    const entry = { round: round, num: currentNumber, time: elapsed, ok: true };
+    history.push(entry);
+    addHistoryItem(entry);
+    updateStats(elapsed);
+    updateProgress();
+
+    const dpm = Math.round((10 / elapsed) * 60);
+    flash(`✓ ${elapsed.toFixed(2)}s — ${dpm} d/m`, 'var(--correct)');
+
+    round++;
+    if (mode !== 'endless' && round >= totalRounds) {
+      endSession();
+      return;
+    }
+    setTimeout(startRound, 500);
+  }
+
+  // ── End session ───────────────────────────────────────
+  function endSession() {
+    running = false;
+    $inp.disabled = true;
+    $start.textContent = 'Start';
+    stopRing();
+    const avg = history.filter(h=>h.ok).reduce((a,b)=>a+b.time,0) / (history.filter(h=>h.ok).length||1);
+    const dpm = Math.round((10 / avg) * 60);
+    flash(`🏁 Done! Avg ${avg.toFixed(2)}s • ${dpm} d/m`, 'var(--accent)');
+    $progress.style.width = '100%';
+  }
+
+  // ── Add history row ───────────────────────────────────
+  function addHistoryItem(e) {
+    // Clear placeholder
+    if ($history.querySelector('div[style]')) $history.innerHTML = '';
+
+    const isBest = e.time === bestTime && history.filter(h=>h.ok).length > 1;
+    const dpm = Math.round((10 / e.time) * 60);
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <span class="round-num">${e.round}</span>
+      <span class="h-num">${e.num}</span>
+      <span class="h-wpm">${dpm} d/m</span>
+      <span class="h-time">${e.time.toFixed(2)}s${isBest ? '<span class="crown">★</span>' : ''}</span>
+      <span class="badge ${e.ok ? 'badge-ok' : 'badge-err'}">${e.ok ? 'OK' : 'ERR'}</span>
+    `;
+    $history.insertBefore(div, $history.firstChild);
+  }
+
+  // ── Input handler ─────────────────────────────────────
+  $inp.addEventListener('input', () => {
+    if (!running) return;
+    const typed = $inp.value.replace(/\D/g, '');
+    $inp.value = typed;
+
+    renderNumber(currentNumber, typed);
+
+    if (typed.length < currentNumber.length) {
+      // Check for wrong character typed
+      const pos = typed.length - 1;
+      if (pos >= 0 && typed[pos] !== currentNumber[pos]) {
+        $inp.classList.add('error');
+        totalErrors++;
+        $errors.textContent = totalErrors;
+      } else {
+        $inp.classList.remove('error');
+      }
+    }
+
+    if (typed.length === 10) {
+      if (typed === currentNumber) {
+        onSuccess();
+      } else {
+        // Wrong — let them correct it (remove last char feedback)
+        $inp.classList.add('error');
+        totalErrors++;
+        $errors.textContent = totalErrors;
+        flash('✗ Wrong number — correct it!', 'var(--wrong)');
+      }
+    }
+  });
+
+  // ── Start button ──────────────────────────────────────
+  $start.addEventListener('click', () => {
+    if (running) return;
+    round = 1;
+    totalErrors = 0;
+    bestTime = Infinity;
+    history = [];
+    $history.innerHTML = '<div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:10px 0;">No rounds yet — hit Start!</div>';
+    $wpm.textContent = '0';
+    $avg.textContent = '—';
+    $best.textContent = '—';
+    $errors.textContent = '0';
+    $progress.style.width = '0%';
+    $inp.disabled = false;
+    running = true;
+    $start.textContent = 'Running…';
+
+    // Countdown
+    let count = 3;
+    $countdown.style.display = 'flex';
+    $countdown.textContent = count;
+    const cid = setInterval(() => {
+      count--;
+      if (count > 0) {
+        $countdown.textContent = count;
+      } else {
+        clearInterval(cid);
+        $countdown.textContent = 'GO!';
+        setTimeout(() => {
+          $countdown.style.display = 'none';
+          startRound();
+        }, 500);
+      }
+    }, 800);
+  });
+
+  // ── Reset button ──────────────────────────────────────
+  $reset.addEventListener('click', () => {
+    running = false;
+    $inp.disabled = true;
+    $inp.value = '';
+    $inp.classList.remove('error','success');
+    $start.textContent = 'Start';
+    stopRing();
+    round = 0;
+    totalErrors = 0;
+    bestTime = Infinity;
+    history = [];
+    currentNumber = '';
+    $num.innerHTML = '<span style="color:var(--muted);font-size:1.1rem;letter-spacing:0.1em;">Press Start</span>';
+    $wpm.textContent = '0';
+    $avg.textContent = '—';
+    $best.textContent = '—';
+    $errors.textContent = '0';
+    $progress.style.width = '0%';
+    $feedback.textContent = '';
+    $history.innerHTML = '<div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:10px 0;">No rounds yet — hit Start!</div>';
+    clearInterval(ringTimer);
+    $countdown.style.display = 'none';
+  });
+
+  // ── Enter key support ─────────────────────────────────
+  $inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !running) $start.click();
+  });
+</script>
+</body>
+</html>
