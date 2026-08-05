@@ -3,37 +3,781 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NumSprint — 10-Digit Speed Trainer</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<title>QR Fountain Transfer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
-  :root {
-    --bg: #0a0c10;
-    --panel: #111318;
-    --border: #1e2330;
-    --accent: #00e5ff;
-    --accent2: #ff6b35;
-    --correct: #39ff14;
-    --wrong: #ff2d55;
-    --dim: #3a4055;
-    --text: #e8eaf0;
-    --muted: #5a6278;
-    --glow: 0 0 18px #00e5ff55;
+  :root{
+    --bg:#0a0e12; --panel:#11161c; --panel2:#161d25; --border:#232c36;
+    --accent:#3ce6c4; --accent2:#ff5da2; --text:#dfe8ee; --dim:#7c8a97;
+    --good:#3ce6c4; --bad:#ff5d6c; --warn:#ffb020;
+    font-family: 'SF Mono', 'Consolas', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    min-height:100vh; padding:16px;
+  }
+  h1{font-size:1.15rem; margin:0 0 2px 0; letter-spacing:.5px;}
+  .sub{color:var(--dim); font-size:.78rem; margin-bottom:16px;}
+  .tabs{display:flex; gap:8px; margin-bottom:14px;}
+  .tab{
+    flex:1; padding:10px; text-align:center; background:var(--panel);
+    border:1px solid var(--border); border-radius:8px; cursor:pointer;
+    color:var(--dim); font-weight:600; font-size:.85rem;
+  }
+  .tab.active{color:var(--accent); border-color:var(--accent); background:#0e1a18;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:14px; margin-bottom:12px;
+  }
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  label{font-size:.75rem; color:var(--dim); display:block; margin-bottom:4px;}
+  select, input[type=file], button{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:8px 10px; font-family:inherit; font-size:.8rem;
+  }
+  input[type=range]{width:100%;}
+  button{cursor:pointer; font-weight:600;}
+  button.primary{background:var(--accent); color:#04231d; border:none;}
+  button.danger{background:var(--bad); color:#2a0505; border:none;}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  .dropzone{
+    border:2px dashed var(--border); border-radius:10px; padding:26px;
+    text-align:center; color:var(--dim); font-size:.85rem; cursor:pointer;
+  }
+  .dropzone.drag{border-color:var(--accent); color:var(--accent);}
+  canvas#qrCanvas{
+    display:block; margin:12px auto; background:#fff; border-radius:6px;
+    image-rendering:pixelated;
+  }
+  .videowrap{position:relative; max-width:420px; margin:0 auto;}
+  video, canvas.scan{width:100%; border-radius:8px; display:block;}
+  canvas.scan{position:absolute; top:0; left:0;}
+  .stats{
+    display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;
+    font-size:.72rem; margin-top:10px;
+  }
+  .stats div{display:flex; justify-content:space-between; border-bottom:1px solid var(--border); padding:3px 0;}
+  .stats b{color:var(--accent); font-weight:600;}
+  .lockbad b{color:var(--bad) !important;}
+  .progress{
+    height:8px; background:var(--panel2); border-radius:4px; overflow:hidden; margin:10px 0;
+  }
+  .progress > div{height:100%; background:var(--accent); width:0%; transition:width .15s;}
+  .log{
+    max-height:110px; overflow-y:auto; font-size:.68rem; color:var(--dim);
+    background:var(--panel2); border-radius:6px; padding:6px 8px; margin-top:8px;
+  }
+  .badge{padding:2px 8px; border-radius:20px; font-size:.65rem; font-weight:700;}
+  .badge.ok{background:#0e2a24; color:var(--accent);}
+  .badge.fail{background:#2a0e12; color:var(--bad);}
+  .session-code{font-size:1.4rem; letter-spacing:3px; color:var(--accent); text-align:center; margin:6px 0;}
+  .filecard{display:flex; justify-content:space-between; align-items:center;}
+  small.hint{color:var(--dim); display:block; margin-top:4px; font-size:.68rem;}
+</style>
+</head>
+<body>
+
+<h1>🔲 QR Fountain Transfer</h1>
+<div class="sub">Screen-to-camera file transfer using LT fountain codes. No Wi-Fi, Bluetooth, or cables.</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="send">Send</div>
+  <div class="tab" data-tab="receive">Receive</div>
+</div>
+
+<!-- ===================== SEND PANEL ===================== -->
+<div class="panel active" id="panel-send">
+  <div class="card">
+    <div class="dropzone" id="dropzone">📁 Tap to choose a file, or drag & drop it here</div>
+    <input type="file" id="fileInput" style="display:none">
+    <div id="fileInfo" style="margin-top:8px; font-size:.78rem; color:var(--dim);"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div style="flex:1; min-width:120px;">
+        <label>Error correction</label>
+        <select id="eccLevel">
+          <option value="L">L — max capacity, least tolerant</option>
+          <option value="M" selected>M — balanced (recommended)</option>
+          <option value="Q">Q — more tolerant, less data/frame</option>
+          <option value="H">H — most tolerant, smallest frames</option>
+        </select>
+      </div>
+      <div style="flex:1; min-width:120px;">
+        <label>Target FPS: <span id="fpsVal">15</span></label>
+        <input type="range" id="fpsRange" min="3" max="30" value="15">
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <label style="display:flex; align-items:center; gap:6px; margin:0;">
+        <input type="checkbox" id="compressChk" checked style="width:auto;"> Compress before sending (gzip)
+      </label>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <label style="display:flex; align-items:center; gap:6px; margin:0;">
+        <input type="checkbox" id="slowModeChk" style="width:auto;"> Slow / single-frame mode (for tricky cameras)
+      </label>
+    </div>
+    <small class="hint">Slow mode shows one frame at a time with a "Next" button instead of auto-cycling — use it if the receiver can't keep a lock at full speed.</small>
+  </div>
+
+  <div class="card" style="text-align:center;">
+    <div class="session-code" id="sessionCode">— — — —</div>
+    <canvas id="qrCanvas" width="360" height="360"></canvas>
+    <div id="slowControls" style="display:none; margin-bottom:10px;">
+      <button id="prevFrameBtn">◀ Prev</button>
+      <button id="nextFrameBtn" class="primary">Next ▶</button>
+    </div>
+    <div class="progress"><div id="sendProgressBar"></div></div>
+    <div class="row" style="justify-content:center;">
+      <button class="primary" id="startSendBtn" disabled>▶ Start Broadcasting</button>
+      <button class="danger" id="stopSendBtn" disabled>■ Stop</button>
+    </div>
+    <div class="stats" id="sendStats"></div>
+  </div>
+</div>
+
+<!-- ===================== RECEIVE PANEL ===================== -->
+<div class="panel" id="panel-receive">
+  <div class="card">
+    <div class="row">
+      <div style="flex:1; min-width:140px;">
+        <label>Camera</label>
+        <select id="cameraSelect"><option>Default</option></select>
+      </div>
+      <button id="torchBtn" style="display:none;">🔦 Torch</button>
+    </div>
+    <div class="videowrap" style="margin-top:10px;">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas class="scan" id="scanCanvas"></canvas>
+    </div>
+    <div class="progress"><div id="recvProgressBar"></div></div>
+    <div class="row" style="justify-content:center;">
+      <button class="primary" id="startRecvBtn">▶ Start Scanning</button>
+      <button class="danger" id="stopRecvBtn" disabled>■ Stop</button>
+    </div>
+    <div class="stats" id="recvStats"></div>
+    <div class="log" id="recvLog"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <div class="filecard">
+      <div>
+        <div id="resultName" style="font-weight:600;"></div>
+        <div id="resultMeta" style="font-size:.72rem; color:var(--dim);"></div>
+      </div>
+      <span class="badge" id="resultBadge"></span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="primary" id="downloadBtn">⬇ Save file</button>
+      <button id="resetBtn">↺ New transfer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   TAB SWITCHING
+========================================================================= */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  };
+});
+
+/* =========================================================================
+   SHARED: PRNG, degree distribution, packet framing
+========================================================================= */
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function packetSeed(session, index){
+  return ((session ^ Math.imul(index + 0x9E3779B9, 2654435761)) >>> 0);
+}
+function robustSolitonCDF(K, c, delta){
+  const S = c * Math.log(K/delta) * Math.sqrt(K);
+  const rho = new Float64Array(K+1);
+  rho[1] = 1/K;
+  for(let i=2;i<=K;i++) rho[i] = 1/(i*(i-1));
+  const tau = new Float64Array(K+1);
+  const bound = Math.min(K, Math.ceil(K/S)-1);
+  for(let i=1;i<=bound;i++) tau[i] = S/(K*i);
+  const spot = Math.round(K/S);
+  if(spot>=1 && spot<=K) tau[spot] += S*Math.log(S/delta)/K;
+  const mu = new Float64Array(K+1);
+  let Z=0;
+  for(let i=1;i<=K;i++){ mu[i]=rho[i]+tau[i]; Z+=mu[i]; }
+  const cdf = new Float64Array(K+1);
+  let acc=0;
+  for(let i=1;i<=K;i++){ acc += mu[i]/Z; cdf[i]=acc; }
+  cdf[K]=1;
+  return cdf;
+}
+function degreeFromCDF(cdf, r){
+  let lo=1, hi=cdf.length-1;
+  while(lo<hi){
+    const mid=(lo+hi)>>1;
+    if(cdf[mid] >= r) hi=mid; else lo=mid+1;
+  }
+  return lo;
+}
+function pickNeighbors(rng, K, degree){
+  if(degree>=K){
+    const all=new Uint32Array(K);
+    for(let i=0;i<K;i++) all[i]=i;
+    return all;
+  }
+  const set=new Set();
+  let guard=0;
+  while(set.size<degree && guard<degree*50+50){
+    set.add(Math.floor(rng()*K));
+    guard++;
+  }
+  // top up if unlucky collisions ran out (tiny K edge case)
+  let n=0;
+  while(set.size<degree && n<K){ set.add(n); n++; }
+  return Uint32Array.from(set);
+}
+const CAPACITY = {L:2953, M:2331, Q:1663, H:1273};
+const CODE_MAP = {L:1, M:0, Q:3, H:2}; // qrcode-generator error-correction constants
+
+/* =========================================================================
+   SHA-256 helper
+========================================================================= */
+async function sha256(buf){
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return new Uint8Array(digest);
+}
+function bytesToHex(b){ return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function hexToBytes(h){ const o=new Uint8Array(h.length/2); for(let i=0;i<o.length;i++) o[i]=parseInt(h.substr(i*2,2),16); return o; }
+
+/* =========================================================================
+   SENDER
+========================================================================= */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const startSendBtn = document.getElementById('startSendBtn');
+const stopSendBtn = document.getElementById('stopSendBtn');
+const qrCanvas = document.getElementById('qrCanvas');
+const qctx = qrCanvas.getContext('2d');
+const sessionCodeEl = document.getElementById('sessionCode');
+const sendStatsEl = document.getElementById('sendStats');
+const sendProgressBar = document.getElementById('sendProgressBar');
+const slowModeChk = document.getElementById('slowModeChk');
+const slowControls = document.getElementById('slowControls');
+
+let sendState = null;
+
+dropzone.onclick = ()=> fileInput.click();
+['dragover','dragleave','drop'].forEach(ev=>{
+  dropzone.addEventListener(ev, e=>{
+    e.preventDefault();
+    if(ev==='dragover') dropzone.classList.add('drag');
+    if(ev==='dragleave') dropzone.classList.remove('drag');
+    if(ev==='drop'){
+      dropzone.classList.remove('drag');
+      if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+    }
+  });
+});
+fileInput.onchange = ()=>{ if(fileInput.files[0]) loadFile(fileInput.files[0]); };
+
+let pendingFile = null;
+function loadFile(f){
+  pendingFile = f;
+  fileInfo.textContent = `${f.name}  •  ${(f.size/1024).toFixed(1)} KB  •  ${f.type||'unknown type'}`;
+  startSendBtn.disabled = false;
+}
+
+document.getElementById('fpsRange').oninput = e=>{
+  document.getElementById('fpsVal').textContent = e.target.value;
+};
+
+async function buildEncoder(file){
+  let bytes = new Uint8Array(await file.arrayBuffer());
+  let compressed = false;
+  if(document.getElementById('compressChk').checked && 'CompressionStream' in window){
+    try{
+      const cs = new CompressionStream('gzip');
+      const stream = new Blob([bytes]).stream().pipeThrough(cs);
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      compressed = true;
+    }catch(e){ compressed=false; }
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  const ecc = document.getElementById('eccLevel').value;
+  const capacity = CAPACITY[ecc];
+  const DATA_HEADER = 9; // type(1)+session(4)+index(4)
+  const blockSize = capacity - DATA_HEADER - 4;
+  const N = bytes.length;
+  const K = Math.max(1, Math.ceil(N / blockSize));
+  const padded = new Uint8Array(K*blockSize);
+  padded.set(bytes);
+  const blocks = [];
+  for(let i=0;i<K;i++) blocks.push(padded.subarray(i*blockSize, (i+1)*blockSize));
 
-  body {
-    background: var(--bg);
-    font-family: 'Manrope', sans-serif;
-    color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    background-image:
-      radial-gradient(ellipse 60% 40% at 20% 10%, #00e5ff08 0%, transparent 60%),
+  const session = Math.floor(Math.random()*0xFFFFFFFF) >>> 0;
+  const cdf = robustSolitonCDF(K, 0.05, 0.05);
+  const checksum = await sha256(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength));
+
+  const nameBytes = new TextEncoder().encode(file.name).slice(0,255);
+  const mimeBytes = new TextEncoder().encode(file.type||'application/octet-stream').slice(0,255);
+
+  function metadataFrame(){
+    const size = 1+4+4+2+2+1+nameBytes.length+1+mimeBytes.length+32+1;
+    const buf = new Uint8Array(size);
+    let p=0;
+    buf[p++]=0; // type 0 = metadata
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(p, session); p+=4;
+    dv.setUint32(p, N); p+=4;
+    dv.setUint16(p, blockSize); p+=2;
+    dv.setUint16(p, K); p+=2;
+    buf[p++]=nameBytes.length; buf.set(nameBytes,p); p+=nameBytes.length;
+    buf[p++]=mimeBytes.length; buf.set(mimeBytes,p); p+=mimeBytes.length;
+    buf.set(checksum,p); p+=32;
+    buf[p++]= compressed?1:0;
+    return buf;
+  }
+
+  function dataFrame(index){
+    const rng = mulberry32(packetSeed(session,index));
+    const degree = degreeFromCDF(cdf, rng());
+    const neighbors = pickNeighbors(rng, K, degree);
+    const payload = new Uint8Array(blockSize);
+    for(const nb of neighbors){
+      const b = blocks[nb];
+      for(let i=0;i<blockSize;i++) payload[i]^=b[i];
+    }
+    const buf = new Uint8Array(1+4+4+blockSize);
+    buf[0]=1;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(1, session);
+    dv.setUint32(5, index);
+    buf.set(payload, 9);
+    return buf;
+  }
+
+  return {N,K,blockSize,session,compressed,ecc,metadataFrame,dataFrame,fileName:file.name};
+}
+
+let qrOverride=false;
+function drawFrame(bytes){
+  if(!qrOverride && window.qrcode){
+    qrcode.stringToBytesFuncs['UTF-8'] = function(s){
+      const b=[]; for(let i=0;i<s.length;i++) b.push(s.charCodeAt(i)&0xff); return b;
+    };
+    qrOverride=true;
+  }
+  let str='';
+  // build binary string in chunks to avoid call-stack blowups
+  const CH=8192;
+  for(let i=0;i<bytes.length;i+=CH){
+    str += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i+CH,bytes.length)));
+  }
+  const eccCode = CODE_MAP[document.getElementById('eccLevel').value];
+  const qr = qrcode(40, ['M','L','H','Q'][eccCode] || 'M');
+  qr.addData(str, 'Byte');
+  qr.make();
+  const count = qr.getModuleCount();
+  const cell = qrCanvas.width / count;
+  qctx.fillStyle='#fff'; qctx.fillRect(0,0,qrCanvas.width,qrCanvas.height);
+  qctx.fillStyle='#000';
+  for(let r=0;r<count;r++){
+    for(let c=0;c<count;c++){
+      if(qr.isDark(r,c)) qctx.fillRect(c*cell, r*cell, cell+0.5, cell+0.5);
+    }
+  }
+}
+
+startSendBtn.onclick = async ()=>{
+  if(!pendingFile) return;
+  startSendBtn.disabled=true;
+  const enc = await buildEncoder(pendingFile);
+  sendState = {enc, frameCount:0, dataCount:0, running:true, startedAt:performance.now(), lastFpsT:performance.now(), fpsCounter:0, fps:0};
+  sessionCodeEl.textContent = enc.session.toString(16).toUpperCase().padStart(8,'0').match(/.{1,4}/g).join(' ');
+  stopSendBtn.disabled=false;
+
+  const slow = slowModeChk.checked;
+  slowControls.style.display = slow ? 'block':'none';
+
+  const META_EVERY = 10;
+  function nextFrameBytes(){
+    const st=sendState;
+    st.frameCount++;
+    if(st.frameCount % META_EVERY === 1){
+      return enc.metadataFrame();
+    }
+    st.dataCount++;
+    return enc.dataFrame(st.dataCount);
+  }
+
+  function updateStats(){
+    const st=sendState;
+    const elapsed = ((performance.now()-st.startedAt)/1000).toFixed(1);
+    const totalPayloadKB = (enc.N/1024).toFixed(1);
+    const pct = Math.min(100, (st.dataCount / (enc.K*1.15)) * 100);
+    sendProgressBar.style.width = pct+'%';
+    sendStatsEl.innerHTML = `
+      <div>Session <b>${enc.session.toString(16)}</b></div>
+      <div>ECC level <b>${enc.ecc}</b></div>
+      <div>Blocks (K) <b>${enc.K}</b></div>
+      <div>Block len <b>${enc.blockSize} B</b></div>
+      <div>Payload <b>${totalPayloadKB} KB</b></div>
+      <div>Compressed <b>${enc.compressed?'yes':'no'}</b></div>
+      <div>Display FPS <b>${st.fps}</b></div>
+      <div>Frames sent <b>${st.frameCount}</b></div>
+      <div>Elapsed <b>${elapsed}s</b></div>
+      <div>Est. overhead <b>~15%</b></div>
+    `;
+  }
+
+  if(slow){
+    let idx=0;
+    drawFrame(nextFrameBytes());
+    updateStats();
+    document.getElementById('nextFrameBtn').onclick = ()=>{ drawFrame(nextFrameBytes()); updateStats(); };
+    document.getElementById('prevFrameBtn').onclick = ()=>{ /* just redraw metadata as a simple "back" */ drawFrame(enc.metadataFrame()); };
+  } else {
+    const targetFps = ()=> parseInt(document.getElementById('fpsRange').value,10);
+    let lastFrame = 0;
+    function loop(t){
+      if(!sendState || !sendState.running) return;
+      const interval = 1000/targetFps();
+      if(t - lastFrame >= interval){
+        lastFrame = t;
+        drawFrame(nextFrameBytes());
+        sendState.fpsCounter++;
+        if(t - sendState.lastFpsT >= 1000){
+          sendState.fps = sendState.fpsCounter;
+          sendState.fpsCounter = 0;
+          sendState.lastFpsT = t;
+        }
+        updateStats();
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+};
+
+stopSendBtn.onclick = ()=>{
+  if(sendState) sendState.running=false;
+  stopSendBtn.disabled=true;
+  startSendBtn.disabled=false;
+};
+
+/* =========================================================================
+   RECEIVER
+========================================================================= */
+const video = document.getElementById('video');
+const scanCanvas = document.getElementById('scanCanvas');
+const sctx = scanCanvas.getContext('2d', {willReadFrequently:true});
+const cameraSelect = document.getElementById('cameraSelect');
+const torchBtn = document.getElementById('torchBtn');
+const startRecvBtn = document.getElementById('startRecvBtn');
+const stopRecvBtn = document.getElementById('stopRecvBtn');
+const recvStatsEl = document.getElementById('recvStats');
+const recvProgressBar = document.getElementById('recvProgressBar');
+const recvLog = document.getElementById('recvLog');
+const resultCard = document.getElementById('resultCard');
+
+let recvState = null;
+let currentStream = null;
+
+async function listCameras(){
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind==='videoinput');
+    cameraSelect.innerHTML = cams.map((c,i)=>`<option value="${c.deviceId}">${c.label||'Camera '+(i+1)}</option>`).join('') || '<option>Default</option>';
+  }catch(e){}
+}
+navigator.mediaDevices?.enumerateDevices?.().then(()=>{});
+
+function log(msg){
+  const d=document.createElement('div');
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  recvLog.prepend(d);
+  while(recvLog.children.length>40) recvLog.removeChild(recvLog.lastChild);
+}
+
+function newReceiverState(){
+  return {
+    meta:null, K:null, blockSize:null, session:null, cdf:null,
+    blocks:null, known:0, adjacency:null, queue:[],
+    frames:0, dup:0, redundant:0, dropped:0,
+    startedAt:performance.now(), lastFpsT:performance.now(), captureCount:0, decodeCount:0,
+    captureFps:0, decodeFps:0, bytesSince:performance.now(), bytesGoodput:0,
+    lock:false, done:false
+  };
+}
+
+function ensureDecoderInit(st, meta){
+  st.meta = meta;
+  st.K = meta.K; st.blockSize = meta.blockSize; st.session = meta.session;
+  st.cdf = robustSolitonCDF(meta.K, 0.05, 0.05);
+  st.blocks = new Array(meta.K).fill(null);
+  st.adjacency = Array.from({length:meta.K}, ()=>new Set());
+  st.pendingPackets = new Map(); // packetKey -> {neighbors:Set, data:Uint8Array}
+}
+
+function xorInto(dst, src){ for(let i=0;i<dst.length;i++) dst[i]^=src[i]; }
+
+function processPacket(st, index, payload){
+  const rng = mulberry32(packetSeed(st.session, index));
+  const degree = degreeFromCDF(st.cdf, rng());
+  const neighbors = pickNeighbors(rng, st.K, degree);
+  const key = index;
+  if(st.pendingPackets.has(key) || (neighbors.length===1 && st.blocks[neighbors[0]])){
+    st.dup++; return;
+  }
+  const remaining = new Set(neighbors);
+  const data = payload.slice();
+  for(const nb of neighbors){
+    if(st.blocks[nb]){
+      xorInto(data, st.blocks[nb]);
+      remaining.delete(nb);
+    }
+  }
+  if(remaining.size===0){ st.redundant++; return; }
+  const pkt = {remaining, data};
+  st.pendingPackets.set(key, pkt);
+  for(const nb of remaining) st.adjacency[nb].add(key);
+  if(remaining.size===1) st.queue.push(key);
+  drainQueue(st);
+}
+
+function drainQueue(st){
+  while(st.queue.length){
+    const key = st.queue.pop();
+    const pkt = st.pendingPackets.get(key);
+    if(!pkt || pkt.remaining.size!==1) continue;
+    const target = pkt.remaining.values().next().value;
+    if(st.blocks[target]){ st.pendingPackets.delete(key); continue; }
+    st.blocks[target] = pkt.data;
+    st.known++;
+    st.pendingPackets.delete(key);
+    const refs = st.adjacency[target];
+    for(const rkey of refs){
+      const rp = st.pendingPackets.get(rkey);
+      if(!rp) continue;
+      if(rp.remaining.has(target)){
+        xorInto(rp.data, st.blocks[target]);
+        rp.remaining.delete(target);
+        if(rp.remaining.size===1) st.queue.push(rkey);
+        if(rp.remaining.size===0){ st.pendingPackets.delete(rkey); }
+      }
+    }
+    refs.clear();
+  }
+}
+
+async function finalizeFile(st){
+  const total = st.K * st.blockSize;
+  const out = new Uint8Array(total);
+  for(let i=0;i<st.K;i++) out.set(st.blocks[i], i*st.blockSize);
+  let final = out.slice(0, st.meta.N);
+  const checksumOk = bytesToHex(await sha256(final.buffer)) === bytesToHex(st.meta.checksum);
+  if(st.meta.compressed){
+    try{
+      const ds = new DecompressionStream('gzip');
+      const stream = new Blob([final]).stream().pipeThrough(ds);
+      final = new Uint8Array(await new Response(stream).arrayBuffer());
+    }catch(e){ log('Decompression failed: '+e.message); }
+  }
+  return {bytes: final, checksumOk};
+}
+
+function parseFrame(bytes){
+  if(bytes.length<5) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const type = bytes[0];
+  if(type===0){
+    let p=1;
+    const session = dv.getUint32(p); p+=4;
+    const N = dv.getUint32(p); p+=4;
+    const blockSize = dv.getUint16(p); p+=2;
+    const K = dv.getUint16(p); p+=2;
+    const nameLen = bytes[p]; p+=1;
+    const name = new TextDecoder().decode(bytes.subarray(p,p+nameLen)); p+=nameLen;
+    const mimeLen = bytes[p]; p+=1;
+    const mime = new TextDecoder().decode(bytes.subarray(p,p+mimeLen)); p+=mimeLen;
+    const checksum = bytes.slice(p,p+32); p+=32;
+    const compressed = bytes[p]===1;
+    return {type:'meta', session,N,blockSize,K,name,mime,checksum,compressed};
+  } else {
+    const session = dv.getUint32(1);
+    const index = dv.getUint32(5);
+    const payload = bytes.subarray(9);
+    return {type:'data', session, index, payload};
+  }
+}
+
+function updateRecvStats(st){
+  const elapsed = ((performance.now()-st.startedAt)/1000).toFixed(1);
+  const goodputKBs = st.meta ? ((st.known*st.blockSize/1024) / Math.max(0.1, elapsed)).toFixed(1) : '0.0';
+  const pct = st.meta ? Math.min(100, (st.known/st.K)*100) : 0;
+  recvProgressBar.style.width = pct+'%';
+  recvStatsEl.innerHTML = `
+    <div>Capture FPS <b>${st.captureFps}</b></div>
+    <div>Decode FPS <b>${st.decodeFps}</b></div>
+    <div class="${st.lock?'':'lockbad'}">Lock <b>${st.lock?'LOCK':'searching'}</b></div>
+    <div>Dropped <b>${st.dropped}</b></div>
+    <div>Goodput <b>${goodputKBs} KB/s</b></div>
+    <div>Elapsed <b>${elapsed}s</b></div>
+    <div>Frames dup/red <b>${st.dup}/${st.redundant}</b></div>
+    <div>Session <b>${st.session? st.session.toString(16):'—'}</b></div>
+    <div>Blocks known <b>${st.meta? st.known+'/'+st.K : '—'}</b></div>
+    <div>Block len <b>${st.blockSize||'—'}</b></div>
+  `;
+}
+
+async function startScanning(){
+  const constraints = {
+    video: cameraSelect.value ? {deviceId:{exact:cameraSelect.value}} : {facingMode:'environment'}
+  };
+  try{
+    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+  }catch(e){
+    try{ currentStream = await navigator.mediaDevices.getUserMedia({video:true}); }
+    catch(e2){ log('Camera error: '+e2.message); return; }
+  }
+  video.srcObject = currentStream;
+  await video.play();
+  await listCameras();
+  const track = currentStream.getVideoTracks()[0];
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  torchBtn.style.display = caps.torch ? 'inline-block':'none';
+  torchBtn.onclick = ()=>{
+    const t = torchBtn.dataset.on==='1';
+    track.applyConstraints({advanced:[{torch:!t}]});
+    torchBtn.dataset.on = t?'0':'1';
+  };
+
+  scanCanvas.width = video.videoWidth || 480;
+  scanCanvas.height = video.videoHeight || 640;
+
+  recvState = newReceiverState();
+  startRecvBtn.disabled=true;
+  stopRecvBtn.disabled=false;
+  resultCard.style.display='none';
+
+  function tick(t){
+    if(!recvState || recvState.done) return;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      sctx.drawImage(video,0,0,scanCanvas.width,scanCanvas.height);
+      const imgData = sctx.getImageData(0,0,scanCanvas.width,scanCanvas.height);
+      recvState.captureCount++;
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts:'dontInvert'});
+      if(code){
+        recvState.lock = true;
+        recvState.decodeCount++;
+        try{
+          const raw = code.binaryData ? new Uint8Array(code.binaryData) : new TextEncoder().encode(code.data);
+          const frame = parseFrame(raw);
+          if(frame){
+            if(frame.type==='meta'){
+              if(!recvState.meta){
+                ensureDecoderInit(recvState, frame);
+                log(`Metadata locked: ${frame.name} (${frame.N} bytes, K=${frame.K})`);
+              }
+            } else if(recvState.meta && frame.session===recvState.session){
+              processPacket(recvState, frame.index, frame.payload);
+            } else {
+              recvState.dropped++;
+            }
+          } else {
+            recvState.dropped++;
+          }
+        }catch(e){ recvState.dropped++; }
+      } else {
+        recvState.lock = false;
+      }
+      if(t - recvState.lastFpsT >= 1000){
+        recvState.captureFps = recvState.captureCount;
+        recvState.decodeFps = recvState.decodeCount;
+        recvState.captureCount=0; recvState.decodeCount=0;
+        recvState.lastFpsT = t;
+      }
+      updateRecvStats(recvState);
+      if(recvState.meta && recvState.known>=recvState.K && !recvState.done){
+        recvState.done = true;
+        onTransferComplete(recvState);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+let lastResult = null;
+async function onTransferComplete(st){
+  log('All blocks recovered. Reconstructing file...');
+  const {bytes, checksumOk} = await finalizeFile(st);
+  lastResult = {bytes, name: st.meta.name, mime: st.meta.mime, checksumOk};
+  resultCard.style.display='block';
+  document.getElementById('resultName').textContent = st.meta.name;
+  document.getElementById('resultMeta').textContent = `${(bytes.length/1024).toFixed(1)} KB • ${st.meta.mime}`;
+  const badge = document.getElementById('resultBadge');
+  badge.textContent = checksumOk ? 'Integrity OK' : 'Checksum mismatch';
+  badge.className = 'badge ' + (checksumOk?'ok':'fail');
+  log(checksumOk ? 'SHA-256 verified ✓' : 'SHA-256 mismatch — file may be corrupted');
+  stopScanning();
+}
+
+function stopScanning(){
+  if(recvState) recvState.done = true;
+  if(currentStream) currentStream.getTracks().forEach(t=>t.stop());
+  startRecvBtn.disabled=false;
+  stopRecvBtn.disabled=true;
+}
+
+startRecvBtn.onclick = startScanning;
+stopRecvBtn.onclick = stopScanning;
+
+document.getElementById('downloadBtn').onclick = async ()=>{
+  if(!lastResult) return;
+  const blob = new Blob([lastResult.bytes], {type:lastResult.mime});
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({suggestedName:lastResult.name});
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    }catch(e){ /* fall through to anchor download */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=lastResult.name; a.click();
+  URL.revokeObjectURL(url);
+};
+
+document.getElementById('resetBtn').onclick = ()=>{
+  resultCard.style.display='none';
+  recvLog.innerHTML='';
+  recvProgressBar.style.width='0%';
+  recvStatsEl.innerHTML='';
+  lastResult=null;
+};
+</script>
+</body>
+</html>
       radial-gradient(ellipse 50% 30% at 80% 90%, #ff6b3508 0%, transparent 60%),
       repeating-linear-gradient(0deg, transparent, transparent 39px, #ffffff04 39px, #ffffff04 40px),
       repeating-linear-gradient(90deg, transparent, transparent 39px, #ffffff04 39px, #ffffff04 40px);
